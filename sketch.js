@@ -1,8 +1,7 @@
-// --- VARIABLES GLOBALES ---
 let imgImage1RemovebgPreview;
 let scratchLayer;
 let particles = [];
-let floatingParticles = []; // Particules flottantes autour de la zone
+let floatingParticles = [];
 let instructionAlpha = 255;
 let isMobile = false;
 let cnv;
@@ -10,217 +9,264 @@ let imageDisplayWidth;
 let imageDisplayHeight;
 let scratchTotalPixels = 0;
 let revealTriggered = false;
-let scratchOpacity = 255; // Pour l'effet de fondu à la fin
+let scratchOpacity = 255;
+let scratchSize = 120;
+let floatingParticleCount = 8;
 
-// --- PARAMÈTRES PREMIUM ---
-const SCRATCH_SIZE = 120; // Un peu plus grand pour un grattage fluide
-const SCRATCH_REVEAL_RATIO = 0.65; // Révélation un peu plus tôt pour éviter la frustration
+const SCRATCH_REVEAL_RATIO = 0.65;
 const COLOR_BG = 10;
+const MOBILE_BREAKPOINT = 767;
 
-// Charge l'image avant le démarrage du programme
+function getViewportSize() {
+  const viewport = window.visualViewport;
+  const viewportWidth = viewport
+    ? viewport.width
+    : document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = viewport
+    ? viewport.height
+    : document.documentElement.clientHeight || window.innerHeight;
+
+  return {
+    width: Math.max(320, Math.round(viewportWidth)),
+    height: Math.max(320, Math.round(viewportHeight))
+  };
+}
+
 function preload() {
   imgImage1RemovebgPreview = loadImage('photo_Robin.png');
 }
 
-// Initialise le canvas, les paramètres et les éléments graphiques
 function setup() {
-  cnv = createCanvas(windowWidth, windowHeight);
-  frameRate(120); // Augmenté à 120 FPS pour une fluidité maximale du curseur
+  const viewport = getViewportSize();
+
+  cnv = createCanvas(viewport.width, viewport.height);
+  pixelDensity(1);
   imageMode(CENTER);
-  
-  isMobile = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) && width < 767;
+  updateDeviceProfile();
   updateImageDimensions();
-  
+
   cnv.elt.style.touchAction = 'none';
-  cnv.elt.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
+  cnv.elt.addEventListener(
+    'touchmove',
+    (event) => {
+      event.preventDefault();
+    },
+    { passive: false }
+  );
 
-  scratchLayer = createGraphics(windowWidth, windowHeight);
+  createScratchLayer();
   drawPremiumSilhouette();
+  resetFloatingParticles();
+}
 
-  // Génère les particules flottantes autour de la zone
-  for (let i = 0; i < 8; i++) {
+function updateDeviceProfile() {
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  isMobile = hasTouch && width <= MOBILE_BREAKPOINT;
+  scratchSize = isMobile ? 88 : 120;
+  floatingParticleCount = isMobile ? 5 : 8;
+  frameRate(isMobile ? 60 : 120);
+}
+
+function createScratchLayer() {
+  scratchLayer = createGraphics(width, height);
+  scratchLayer.pixelDensity(1);
+  scratchLayer.imageMode(CENTER);
+}
+
+function resetFloatingParticles() {
+  floatingParticles = [];
+  for (let i = 0; i < floatingParticleCount; i++) {
     floatingParticles.push(new FloatingParticle());
   }
 }
 
-// Calcule les dimensions d'affichage de l'image pour qu'elle s'adapte à la fenêtre
 function updateImageDimensions() {
-  let scale = min(width / imgImage1RemovebgPreview.width, height / imgImage1RemovebgPreview.height);
+  const safePadding = max(24, min(width, height) * (isMobile ? 0.08 : 0.12));
+  const maxWidth = max(160, width - safePadding * 2);
+  const maxHeight = max(160, height - safePadding * 2);
+  const scale = min(
+    maxWidth / imgImage1RemovebgPreview.width,
+    maxHeight / imgImage1RemovebgPreview.height
+  );
+
   imageDisplayWidth = imgImage1RemovebgPreview.width * scale;
   imageDisplayHeight = imgImage1RemovebgPreview.height * scale;
 }
 
-// Crée la couche de grattage avec un dégradé élégant sur la forme de l'image
 function drawPremiumSilhouette() {
   scratchLayer.clear();
-  
-  // 1. Dessiner l'image qui servira de masque (forme visible à gratter)
-  scratchLayer.imageMode(CENTER);
-  scratchLayer.image(imgImage1RemovebgPreview, width / 2, height / 2, imageDisplayWidth, imageDisplayHeight);
-  
-  // 2. Appliquer un dégradé élégant UNIQUEMENT SUR la forme de l'image (méthode avancée)
-  // Utilise le contexte Canvas pour un composite mode : 'source-in' applique le dégradé seulement où l'image est opaque
-  let ctx = scratchLayer.drawingContext;
-  ctx.globalCompositeOperation = 'source-in'; // Le remplissage suivant n'affecte que les pixels non-transparents
-  
-  let gradient = ctx.createLinearGradient(0, 0, width, height); // Dégradé du coin supérieur gauche au coin inférieur droit
-  gradient.addColorStop(0, '#1e1b4b'); // Couleur de départ : violet sombre
-  gradient.addColorStop(1, '#0f172a'); // Couleur d'arrivée : bleu ardoise sombre
-  
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height); // Remplit tout le canvas avec le dégradé, mais seulement sur la forme
-  
-  ctx.globalCompositeOperation = 'source-over'; // Reset pour éviter d'affecter les prochains dessins
+  scratchLayer.image(
+    imgImage1RemovebgPreview,
+    width / 2,
+    height / 2,
+    imageDisplayWidth,
+    imageDisplayHeight
+  );
 
-  // 3. Calculer le nombre total de pixels à gratter (pixels opaques de la couche)
-  // Cela sert de référence pour mesurer le progrès (optimisé en comptant seulement les pixels avec alpha > 10)
+  const ctx = scratchLayer.drawingContext;
+  ctx.globalCompositeOperation = 'source-in';
+
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, '#1e1b4b');
+  gradient.addColorStop(1, '#0f172a');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over';
+
   scratchLayer.loadPixels();
   scratchTotalPixels = 0;
+
   for (let i = 0; i < scratchLayer.pixels.length; i += 4) {
-    if (scratchLayer.pixels[i + 3] > 10) scratchTotalPixels++; // Alpha channel
+    if (scratchLayer.pixels[i + 3] > 10) {
+      scratchTotalPixels++;
+    }
   }
 }
 
-// Fonction principale appelée à chaque frame pour dessiner l'animation
 function draw() {
   background(COLOR_BG);
-
-  // L'image de base (La photo révélée)
   image(imgImage1RemovebgPreview, width / 2, height / 2, imageDisplayWidth, imageDisplayHeight);
 
-  // Gestion de la couche à gratter et de son fondu de disparition
   if (revealTriggered) {
-    scratchOpacity = lerp(scratchOpacity, 0, 0.04); // Fondu en douceur
+    scratchOpacity = lerp(scratchOpacity, 0, 0.04);
   }
 
   if (scratchOpacity > 1) {
-    // Ajout d'une pulsation subtile pour simuler une brillance de la forme elle-même
-    let pulseFactor = 1 + sin(frameCount * 0.05) * 0.05; // Pulsation réduite à 5% pour moins d'opacité
-    let effectiveOpacity = scratchOpacity * pulseFactor;
+    const pulseFactor = 1 + sin(frameCount * 0.05) * 0.05;
+    const effectiveOpacity = scratchOpacity * pulseFactor;
+
     push();
     tint(255, effectiveOpacity);
     image(scratchLayer, width / 2, height / 2);
     pop();
   }
 
-  if (mouseIsPressed && !revealTriggered) {
-    scratch();
+  if (!isMobile && mouseIsPressed && !revealTriggered) {
+    scratchAtPointer(mouseX, mouseY);
     instructionAlpha = lerp(instructionAlpha, 0, 0.1);
   }
 
-  // Particules premium (Étincelles)
   for (let i = particles.length - 1; i >= 0; i--) {
     particles[i].update();
     particles[i].display();
-    if (particles[i].finished()) particles.splice(i, 1);
+    if (particles[i].finished()) {
+      particles.splice(i, 1);
+    }
   }
 
-  // Particules flottantes autour de la zone pour attirer l'attention
-  for (let fp of floatingParticles) {
-    fp.update();
-    fp.display();
+  for (const floatingParticle of floatingParticles) {
+    floatingParticle.update();
+    floatingParticle.display();
   }
 
   displayUI();
 
-  if (!isMobile) drawCursor();
+  if (!isMobile) {
+    drawCursor();
+  }
 }
 
-// Effectue le grattage à la position de la souris et génère des particules
-function scratch() {
+function scratchAtPointer(pointerX, pointerY) {
+  if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) {
+    return;
+  }
+
   scratchLayer.push();
-  scratchLayer.erase(255, 255); // Effacement doux (anti-aliasing natif)
+  scratchLayer.erase(255, 255);
   scratchLayer.noStroke();
-  scratchLayer.ellipse(mouseX, mouseY, SCRATCH_SIZE, SCRATCH_SIZE);
+  scratchLayer.ellipse(pointerX, pointerY, scratchSize, scratchSize);
   scratchLayer.noErase();
   scratchLayer.pop();
 
-  // Apparition d'étincelles
   if (frameCount % 3 === 0) {
-    particles.push(new Spark(mouseX, mouseY));
+    particles.push(new Spark(pointerX, pointerY));
   }
 
-  // Optimisation : On ne vérifie les pixels que toutes les 15 frames pour préserver le framerate
-  if (frameCount % 15 === 0) {
+  if (frameCount % (isMobile ? 8 : 15) === 0) {
     checkScratchProgress();
   }
 }
 
-// Vérifie le pourcentage de la zone grattée et déclenche la révélation si nécessaire
+function scratchFromTouches() {
+  if (touches.length === 0) {
+    scratchAtPointer(mouseX, mouseY);
+    return;
+  }
+
+  for (const touch of touches) {
+    scratchAtPointer(touch.x, touch.y);
+  }
+}
+
 function checkScratchProgress() {
   scratchLayer.loadPixels();
   let remaining = 0;
-  // Optimisation : on saute des pixels pour compter beaucoup plus vite (vérifie 1 pixel sur 4)
-  // Cela réduit la charge CPU tout en gardant une estimation précise du progrès
-  for (let i = 0; i < scratchLayer.pixels.length; i += 16) { // 16 = 4 octets par pixel RGBA
-    if (scratchLayer.pixels[i + 3] > 10) { // Vérifie l'alpha (transparence)
+
+  for (let i = 0; i < scratchLayer.pixels.length; i += 16) {
+    if (scratchLayer.pixels[i + 3] > 10) {
       remaining++;
     }
   }
-  
-  // Calcule le ratio gratté : 1 - (pixels restants / total initial)
-  // Divisé par 4 car on a vérifié 1 pixel sur 4, donc on ajuste le total pour la précision
-  let scratched = 1 - (remaining / (scratchTotalPixels / 4));
-  
+
+  const scratched = 1 - remaining / (scratchTotalPixels / 4);
+
   if (!revealTriggered && scratched >= SCRATCH_REVEAL_RATIO) {
     revealTriggered = true;
-    instructionAlpha = 0; // Cache immédiatement le texte d'instruction
+    instructionAlpha = 0;
   }
 }
 
-// Affiche l'interface utilisateur (actuellement vide, texte retiré pour une expérience plus immersive)
 function displayUI() {
-  // Texte d'instruction retiré pour laisser l'effet visuel parler de lui-même
 }
 
-// Dessine le curseur personnalisé pour indiquer la zone de grattage
 function drawCursor() {
+  const cursorSize = max(30, scratchSize * 0.35);
+
   push();
   translate(mouseX, mouseY);
   noFill();
-  stroke(255, 80); // Contour très léger
+  stroke(255, 80);
   strokeWeight(1);
-  ellipse(0, 0, 40, 40);
+  ellipse(0, 0, cursorSize, cursorSize);
   fill(255, 120);
   noStroke();
-  ellipse(0, 0, 4, 4); // Point central minimaliste
+  ellipse(0, 0, 4, 4);
   pop();
 }
 
-// --- CLASSE FLOATING PARTICLE (Particules flottantes autour de la zone) ---
-// Classe pour créer des particules qui naissent sur le contour de la forme, se déplacent radialement dans tous les sens, s'estompent et recommencent
 class FloatingParticle {
   constructor() {
-    this.reset(); // Initialise la particule
+    this.reset();
   }
-  
+
   reset() {
-    this.angle = random(TWO_PI); // Angle initial sur le contour
-    this.radius = imageDisplayWidth / 2 + random(0, 10); // Position sur le contour (avec légère variation)
-    this.x = width / 2 + cos(this.angle) * this.radius;
-    this.y = height / 2 + sin(this.angle) * this.radius;
-    this.direction = this.angle + random(-PI/2, PI/2); // Direction légèrement variée
-    this.speed = random(1, 3); // Vitesse de déplacement
-    this.alpha = 255; // Opacité initiale
+    const radiusX = imageDisplayWidth / 2 + random(0, 12);
+    const radiusY = imageDisplayHeight / 2 + random(0, 12);
+
+    this.angle = random(TWO_PI);
+    this.x = width / 2 + cos(this.angle) * radiusX;
+    this.y = height / 2 + sin(this.angle) * radiusY;
+    this.direction = this.angle + random(-PI / 2, PI / 2);
+    this.speed = random(isMobile ? 0.8 : 1, isMobile ? 2.2 : 3);
+    this.alpha = 255;
     this.size = random(2, 5);
-    this.col = random() > 0.5 ? color(168, 85, 247) : color(45, 212, 191); // Violet ou cyan
+    this.col = random() > 0.5 ? color(168, 85, 247) : color(45, 212, 191);
   }
-  
+
   update() {
-    // Déplace la particule dans sa direction
     this.x += cos(this.direction) * this.speed;
     this.y += sin(this.direction) * this.speed;
-    this.alpha -= 3; // S'estompe progressivement
-    
-    // Si elle s'estompe complètement ou sort de l'écran, recommence
+    this.alpha -= 3;
+
     if (this.alpha <= 0 || this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
       this.reset();
     }
   }
-  
+
   display() {
     push();
-    // Effet de lueur subtil
     drawingContext.shadowBlur = 8;
     drawingContext.shadowColor = this.col;
     noStroke();
@@ -230,34 +276,31 @@ class FloatingParticle {
   }
 }
 
-// --- CLASSE SPARK (Étincelles au lieu de poussière) ---
-// Classe pour créer et gérer les particules d'étincelles lors du grattage
 class Spark {
   constructor(x, y) {
     this.x = x;
     this.y = y;
     this.vx = random(-1.5, 1.5);
-    this.vy = random(-2, -0.5); // Flotte vers le haut
+    this.vy = random(-2, -0.5);
     this.alpha = 255;
     this.size = random(1, 3);
-    // Couleurs de ton site : Cyan ou Violet
     this.col = random() > 0.5 ? color(168, 85, 247) : color(45, 212, 191);
   }
-  
-  finished() { return this.alpha < 0; }
-  
+
+  finished() {
+    return this.alpha < 0;
+  }
+
   update() {
     this.x += this.vx;
     this.y += this.vy;
     this.alpha -= 5;
   }
-  
+
   display() {
     push();
-    // Effet de lueur (glow)
     drawingContext.shadowBlur = 10;
     drawingContext.shadowColor = this.col;
-    
     noStroke();
     fill(red(this.col), green(this.col), blue(this.col), this.alpha);
     ellipse(this.x, this.y, this.size);
@@ -265,16 +308,39 @@ class Spark {
   }
 }
 
-// Gère le redimensionnement de la fenêtre en ajustant le canvas et les éléments
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-  updateImageDimensions();
-  drawPremiumSilhouette();
-  revealTriggered = false; // Permet de regratter si on redimensionne
-  scratchOpacity = 255;
-  // Régénère les particules flottantes
-  floatingParticles = [];
-  for (let i = 0; i < 8; i++) {
-    floatingParticles.push(new FloatingParticle());
+function touchStarted() {
+  if (!revealTriggered) {
+    scratchFromTouches();
+    instructionAlpha = lerp(instructionAlpha, 0, 0.1);
   }
+
+  return false;
+}
+
+function touchMoved() {
+  if (!revealTriggered) {
+    scratchFromTouches();
+    instructionAlpha = lerp(instructionAlpha, 0, 0.1);
+  }
+
+  return false;
+}
+
+function touchEnded() {
+  return false;
+}
+
+function windowResized() {
+  const viewport = getViewportSize();
+
+  resizeCanvas(viewport.width, viewport.height);
+  updateDeviceProfile();
+  updateImageDimensions();
+  createScratchLayer();
+  drawPremiumSilhouette();
+  scratchOpacity = 255;
+  instructionAlpha = 255;
+  revealTriggered = false;
+  particles = [];
+  resetFloatingParticles();
 }
