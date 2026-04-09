@@ -54,28 +54,30 @@ function updateImageDimensions() {
 function drawPremiumSilhouette() {
   scratchLayer.clear();
   
-  // 1. Dessiner l'image qui servira de masque
+  // 1. Dessiner l'image qui servira de masque (forme visible à gratter)
   scratchLayer.imageMode(CENTER);
   scratchLayer.image(imgImage1RemovebgPreview, width / 2, height / 2, imageDisplayWidth, imageDisplayHeight);
   
-  // 2. Appliquer un dégradé élégant uniquement SUR la forme de l'image (Méthode Pro)
+  // 2. Appliquer un dégradé élégant UNIQUEMENT SUR la forme de l'image (méthode avancée)
+  // Utilise le contexte Canvas pour un composite mode : 'source-in' applique le dégradé seulement où l'image est opaque
   let ctx = scratchLayer.drawingContext;
-  ctx.globalCompositeOperation = 'source-in';
+  ctx.globalCompositeOperation = 'source-in'; // Le remplissage suivant n'affecte que les pixels non-transparents
   
-  let gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, '#1e1b4b'); // Violet très très sombre
-  gradient.addColorStop(1, '#0f172a'); // Bleu ardoise très sombre
+  let gradient = ctx.createLinearGradient(0, 0, width, height); // Dégradé du coin supérieur gauche au coin inférieur droit
+  gradient.addColorStop(0, '#1e1b4b'); // Couleur de départ : violet sombre
+  gradient.addColorStop(1, '#0f172a'); // Couleur d'arrivée : bleu ardoise sombre
   
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, width, height); // Remplit tout le canvas avec le dégradé, mais seulement sur la forme
   
-  ctx.globalCompositeOperation = 'source-over'; // Reset
+  ctx.globalCompositeOperation = 'source-over'; // Reset pour éviter d'affecter les prochains dessins
 
-  // Calculer la zone à gratter initiale
+  // 3. Calculer le nombre total de pixels à gratter (pixels opaques de la couche)
+  // Cela sert de référence pour mesurer le progrès (optimisé en comptant seulement les pixels avec alpha > 10)
   scratchLayer.loadPixels();
   scratchTotalPixels = 0;
   for (let i = 0; i < scratchLayer.pixels.length; i += 4) {
-    if (scratchLayer.pixels[i + 3] > 10) scratchTotalPixels++;
+    if (scratchLayer.pixels[i + 3] > 10) scratchTotalPixels++; // Alpha channel
   }
 }
 
@@ -92,8 +94,8 @@ function draw() {
   }
 
   if (scratchOpacity > 1) {
-    // Ajout d'une pulsation pour simuler une brillance de la forme elle-même
-    let pulseFactor = 1 + sin(frameCount * 0.05) * 0.1; // Pulsation subtile
+    // Ajout d'une pulsation subtile pour simuler une brillance de la forme elle-même
+    let pulseFactor = 1 + sin(frameCount * 0.05) * 0.05; // Pulsation réduite à 5% pour moins d'opacité
     let effectiveOpacity = scratchOpacity * pulseFactor;
     push();
     tint(255, effectiveOpacity);
@@ -148,41 +150,27 @@ function scratch() {
 function checkScratchProgress() {
   scratchLayer.loadPixels();
   let remaining = 0;
-  // Optimisation : on saute des pixels pour compter beaucoup plus vite
-  for (let i = 0; i < scratchLayer.pixels.length; i += 16) {
-    if (scratchLayer.pixels[i + 3] > 10) {
+  // Optimisation : on saute des pixels pour compter beaucoup plus vite (vérifie 1 pixel sur 4)
+  // Cela réduit la charge CPU tout en gardant une estimation précise du progrès
+  for (let i = 0; i < scratchLayer.pixels.length; i += 16) { // 16 = 4 octets par pixel RGBA
+    if (scratchLayer.pixels[i + 3] > 10) { // Vérifie l'alpha (transparence)
       remaining++;
     }
   }
   
-  // Total divisé par 4 car on vérifie 1 pixel sur 4 (16 octets)
+  // Calcule le ratio gratté : 1 - (pixels restants / total initial)
+  // Divisé par 4 car on a vérifié 1 pixel sur 4, donc on ajuste le total pour la précision
   let scratched = 1 - (remaining / (scratchTotalPixels / 4));
   
   if (!revealTriggered && scratched >= SCRATCH_REVEAL_RATIO) {
     revealTriggered = true;
-    instructionAlpha = 0;
+    instructionAlpha = 0; // Cache immédiatement le texte d'instruction
   }
 }
 
-// Affiche l'interface utilisateur, comme le texte d'instruction
+// Affiche l'interface utilisateur (actuellement vide, texte retiré pour une expérience plus immersive)
 function displayUI() {
-  if (instructionAlpha > 1 && !revealTriggered) {
-    push();
-    textAlign(CENTER, CENTER);
-    textFont('Inter, system-ui, sans-serif'); 
-    textStyle(BOLD);
-    textSize(14); // Plus petit, plus raffiné
-    letterSpacing = 2; // Simulé : on peut aussi espacer manuellement si besoin
-    
-    fill(255, instructionAlpha * 0.7);
-    text("DÉCOUVREZ-MOI", width / 2, height - 80);
-    
-    // Ligne décorative minimaliste
-    stroke(255, instructionAlpha * 0.2);
-    strokeWeight(1);
-    line(width/2 - 30, height - 60, width/2 + 30, height - 60);
-    pop();
-  }
+  // Texte d'instruction retiré pour laisser l'effet visuel parler de lui-même
 }
 
 // Dessine le curseur personnalisé pour indiquer la zone de grattage
@@ -200,37 +188,44 @@ function drawCursor() {
 }
 
 // --- CLASSE FLOATING PARTICLE (Particules flottantes autour de la zone) ---
-// Classe pour créer des particules qui pulsent sur le contour de la forme pour simuler une brillance
+// Classe pour créer des particules qui naissent sur le contour de la forme, se déplacent radialement dans tous les sens, s'estompent et recommencent
 class FloatingParticle {
   constructor() {
-    this.angle = random(TWO_PI);
-    this.radiusOffset = random(5, 15); // Distance fixe du contour
-    this.pulseSpeed = random(0.05, 0.1); // Vitesse de pulsation
-    this.baseAlpha = random(100, 200);
-    this.alpha = this.baseAlpha;
+    this.reset(); // Initialise la particule
+  }
+  
+  reset() {
+    this.angle = random(TWO_PI); // Angle initial sur le contour
+    this.radius = imageDisplayWidth / 2 + random(0, 10); // Position sur le contour (avec légère variation)
+    this.x = width / 2 + cos(this.angle) * this.radius;
+    this.y = height / 2 + sin(this.angle) * this.radius;
+    this.direction = this.angle + random(-PI/2, PI/2); // Direction légèrement variée
+    this.speed = random(1, 3); // Vitesse de déplacement
+    this.alpha = 255; // Opacité initiale
     this.size = random(2, 5);
     this.col = random() > 0.5 ? color(168, 85, 247) : color(45, 212, 191); // Violet ou cyan
   }
   
   update() {
-    // Pulsation de l'alpha pour un effet de "battement"
-    this.alpha = this.baseAlpha + sin(frameCount * this.pulseSpeed) * 50;
-    this.alpha = constrain(this.alpha, 50, 255);
+    // Déplace la particule dans sa direction
+    this.x += cos(this.direction) * this.speed;
+    this.y += sin(this.direction) * this.speed;
+    this.alpha -= 3; // S'estompe progressivement
+    
+    // Si elle s'estompe complètement ou sort de l'écran, recommence
+    if (this.alpha <= 0 || this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
+      this.reset();
+    }
   }
   
   display() {
-    // Position fixe sur le contour de la forme
-    let radiusX = imageDisplayWidth / 2 + this.radiusOffset;
-    let radiusY = imageDisplayHeight / 2 + this.radiusOffset;
-    let x = width / 2 + cos(this.angle) * radiusX;
-    let y = height / 2 + sin(this.angle) * radiusY;
     push();
-    // Effet de lueur pour la brillance
-    drawingContext.shadowBlur = 10;
+    // Effet de lueur subtil
+    drawingContext.shadowBlur = 8;
     drawingContext.shadowColor = this.col;
     noStroke();
     fill(red(this.col), green(this.col), blue(this.col), this.alpha);
-    ellipse(x, y, this.size);
+    ellipse(this.x, this.y, this.size);
     pop();
   }
 }
