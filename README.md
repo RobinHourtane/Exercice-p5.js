@@ -125,6 +125,14 @@
 - ✅ Ajout du remote vers https://github.com/RobinHourtane/Exercice-p5.js.git
 - ✅ Push réussi vers branche `main`
 
+#### 15. Compatibilité Mobile Renforcée
+**Demande** : "Fais en sorte que ça marche sur format mobile s'il te plaît."
+- ✅ Ajout de la balise `meta viewport` pour un affichage correct sur smartphone
+- ✅ Ajustement CSS pour gérer le plein écran mobile (`100dvh`, `overflow: hidden`, `touch-action`)
+- ✅ Adaptation du canvas à la taille réelle du viewport avec `visualViewport` et `windowResized()`
+- ✅ Support tactile amélioré avec `touchStarted()` et `touchMoved()` pour gratter au doigt
+- ✅ Réglages spécifiques mobile sur la taille de grattage, la densité de pixels et les performances
+
 ---
 
 ## 🎨 Résumé des Fonctionnalités Finales
@@ -254,6 +262,16 @@
 
 ---
 
+### 15. **Compatibilité Mobile Renforcée**
+**Demande** : Faire en sorte que l'expérience fonctionne proprement sur format mobile.
+- ✅ Ajout de `meta viewport` dans la page HTML pour une mise à l'échelle correcte
+- ✅ CSS mis à jour pour éviter les débordements et mieux gérer la hauteur d'écran mobile
+- ✅ Taille du canvas recalculée selon le viewport réel pour un rendu plus fiable sur smartphone
+- ✅ Interactions tactiles ajoutées pour permettre le grattage au doigt
+- ✅ Taille de grattage et framerate ajustés pour de meilleures sensations sur mobile
+
+---
+
 ## 🎨 Résumé des Fonctionnalités Finales
 
 ### Interactions et Effets
@@ -276,7 +294,7 @@ nosité subtile (shadow blur) sur toutes les particules
 - **Responsive** : S'adapte à toute taille d'écran avec redimensionnement automatique
 
 ### Accessibilité
-- **Support mobile** : Désactivation du curseur personnalisé, prévention des comportements tactiles par défaut
+- **Support mobile** : Viewport, canvas responsive, grattage tactile au doigt et prévention des comportements tactiles par défaut
 - **Clair et intuitif** : L'expérience visuelle guide l'utilisateur sans texte
 
 ---
@@ -313,7 +331,7 @@ Grattage/
 
 ### Caractéristiques Principales
 - ✅ **Responsive Design** : Redimensionnement dynamique avec `windowResized()`
-- ✅ **Support Mobile** : Gestion des événements tactiles, curseur désactivé sur mobile pour meilleure UX
+- ✅ **Support Mobile** : Gestion du viewport mobile, événements tactiles dédiés et curseur désactivé sur mobile pour meilleure UX
 - ✅ **Curseur Personnalisé** : Anneau minimaliste de 40px reflétant la zone de grattage
 - ✅ **Détection de Révélation** : À 65% d'opacité gratté, révélation complète
 - ✅ **Animation Fluide** : Confetti en cascade et particules radiales
