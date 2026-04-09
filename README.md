@@ -1,6 +1,6 @@
-# Projet Grattage - Historique de Développement
+# Projet Grattage - Historique Complet de Développement
 
-🎨 **Effet "Scratch Card" p5.js pour Portfolio**
+**🎨 Effet "Scratch Card" p5.js pour Portfolio**
 - **URL Cible** : robin-hourtane.fr
 - **Technologie** : JavaScript / p5.js
 - **Objectif** : Créer une interaction élégante où l'utilisateur gratte une couche (canvas) au curseur pour révéler une photo (profil), en harmonie avec le design sombre, épuré et néon du site.
